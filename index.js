@@ -8,6 +8,20 @@ function initializeHomebridge(homebridge) {
   homebridge.registerAccessory('homebridge-plantain', 'Plantain', PlantainAccessory);
 }
 
+function extractVoltage(json, channel) {
+  if (!Array.isArray(json?.samples)) {
+    throw new Error(`Invalid response: expected "samples" array, got: ${JSON.stringify(json)}`)
+  }
+
+  const voltage = json.samples.find(s => Number(s?.chan) === Number(channel))?.value;
+
+  if (typeof voltage !== 'number') {
+    throw new Error(`No voltage data for channel ${channel}, samples: ${JSON.stringify(json.samples)}`);
+  }
+
+  return voltage;
+}
+
 function PlantainAccessory(log, config, api, fetcher = fetch) {
   this.log = log;
   this.name = config.name || 'Plant Moisture';
@@ -57,13 +71,13 @@ PlantainAccessory.prototype.poll = async function () {
 
   try {
     const res = await this.fetcher(url);
-    const json = await res.json();
-    const voltage = (json.samples.find(s => Number(s.chan) === Number(this.channel)) || {}).value;
 
-    if (typeof voltage !== 'number') {
-      this.log.warn(`No data for channel ${this.channel}`);
-      return;
+    if (!res.ok) {
+      throw new Error(`VegeHub returned status ${res.status}: ${res.statusText}`);
     }
+
+    const json = await res.json();
+    const voltage = extractVoltage(json, this.channel);
 
     const vwc = Math.max(0, Math.min(100, voltageToVWC(voltage)));
     this.currentHumidity = Math.round(vwc * 10) / 10;
@@ -85,7 +99,7 @@ PlantainAccessory.prototype.poll = async function () {
         .updateValue(this.contactState);
     }
   } catch (e) {
-    this.log.error('Failed to reach VegeHub:', e.message);
+    this.log.error('Failed to update from VegeHub:', e.message);
   }
 };
 

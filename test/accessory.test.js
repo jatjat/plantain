@@ -53,14 +53,22 @@ const mockHap = {
   }
 };
 
-// Helper to create mock fetch
-function createMockFetch(responseData, shouldError = false) {
+// Helper to create mock fetch with custom response
+function createMockFetch(responseData, shouldError = false, shouldFailJson = false, status = 200) {
   return async (url) => {
     if (shouldError) {
       throw new Error('Network error');
     }
     return {
-      json: async () => responseData
+      ok: status >= 200 && status < 300,
+      status: status,
+      statusText: status === 404 ? 'Not Found' : status === 500 ? 'Internal Server Error' : 'OK',
+      json: async () => {
+        if (shouldFailJson) {
+          throw new Error('Unexpected token < in JSON');
+        }
+        return responseData;
+      }
     };
   };
 }
@@ -127,7 +135,7 @@ describe('PlantainAccessory', () => {
 
       const accessory = new PlantainAccessory(log, config);
 
-      assert.ok(log.messages.some(m => m.level === 'error' && m.args[0].includes('No IP')));
+      assert.ok(log.messages.some(m => m.level === 'error' && m.args.some(arg => typeof arg === 'string' && arg.includes('No IP'))));
     });
 
     it('returns three services', () => {
@@ -195,7 +203,7 @@ describe('PlantainAccessory', () => {
   });
 
   describe('error handling', () => {
-    it('logs warning when channel data is missing', async () => {
+    it('logs error when channel data is missing', async () => {
       const log = createMockLog();
       const config = { name: 'Test', ip: '192.168.1.100', channel: 3, pollInterval: 9999 };
       const mockFetch = createMockFetch({ samples: [{ chan: 1, value: 1.5 }] }); // No chan_3
@@ -204,7 +212,8 @@ describe('PlantainAccessory', () => {
       await wait(10);
       clearInterval(accessory.pollTimer);
 
-      assert.ok(log.messages.some(m => m.level === 'warn'));
+      const errorLog = log.messages.find(m => m.level === 'error' && m.args.some(arg => typeof arg === 'string' && arg.includes('No voltage data for channel')));
+      assert.ok(errorLog);
     });
 
     it('logs error on network failure', async () => {
@@ -216,7 +225,70 @@ describe('PlantainAccessory', () => {
       await wait(10);
       clearInterval(accessory.pollTimer);
 
-      assert.ok(log.messages.some(m => m.level === 'error' && m.args[0].includes('Failed to reach')));
+      assert.ok(log.messages.some(m => m.level === 'error' && m.args.some(arg => typeof arg === 'string' && arg.includes('Failed to update'))));
+    });
+
+    it('logs error on HTTP 500 status', async () => {
+      const log = createMockLog();
+      const config = { name: 'Test', ip: '192.168.1.100', pollInterval: 9999 };
+      const mockFetch = createMockFetch({}, false, false, 500);
+
+      const accessory = new PlantainAccessory(log, config, null, mockFetch);
+      await wait(10);
+      clearInterval(accessory.pollTimer);
+
+      assert.ok(log.messages.some(m => m.level === 'error' && m.args.some(arg => typeof arg === 'string' && arg.includes('500'))));
+    });
+
+    it('logs error on malformed JSON', async () => {
+      const log = createMockLog();
+      const config = { name: 'Test', ip: '192.168.1.100', pollInterval: 9999 };
+      const mockFetch = createMockFetch({}, false, true); // shouldFailJson = true
+
+      const accessory = new PlantainAccessory(log, config, null, mockFetch);
+      await wait(10);
+      clearInterval(accessory.pollTimer);
+
+      assert.ok(log.messages.some(m => m.level === 'error' && m.args.some(arg => typeof arg === 'string' && arg.includes('Failed to update'))));
+    });
+
+    it('logs error when samples is missing', async () => {
+      const log = createMockLog();
+      const config = { name: 'Test', ip: '192.168.1.100', pollInterval: 9999 };
+      const mockFetch = createMockFetch({ status: 'ok' }); // No samples property
+
+      const accessory = new PlantainAccessory(log, config, null, mockFetch);
+      await wait(10);
+      clearInterval(accessory.pollTimer);
+
+      const errorLog = log.messages.find(m => m.level === 'error' && m.args.some(arg => typeof arg === 'string' && arg.includes('expected "samples" array')));
+      assert.ok(errorLog);
+    });
+
+    it('logs error when samples is not an array', async () => {
+      const log = createMockLog();
+      const config = { name: 'Test', ip: '192.168.1.100', pollInterval: 9999 };
+      const mockFetch = createMockFetch({ samples: 'not an array' }); // samples is a string
+
+      const accessory = new PlantainAccessory(log, config, null, mockFetch);
+      await wait(10);
+      clearInterval(accessory.pollTimer);
+
+      const errorLog = log.messages.find(m => m.level === 'error' && m.args.some(arg => typeof arg === 'string' && arg.includes('expected "samples" array')));
+      assert.ok(errorLog);
+    });
+
+    it('logs error when samples array is empty', async () => {
+      const log = createMockLog();
+      const config = { name: 'Test', ip: '192.168.1.100', pollInterval: 9999 };
+      const mockFetch = createMockFetch({ samples: [] }); // Empty samples
+
+      const accessory = new PlantainAccessory(log, config, null, mockFetch);
+      await wait(10);
+      clearInterval(accessory.pollTimer);
+
+      const errorLog = log.messages.find(m => m.level === 'error' && m.args.some(arg => typeof arg === 'string' && arg.includes('No voltage data for channel')));
+      assert.ok(errorLog);
     });
   });
 });
