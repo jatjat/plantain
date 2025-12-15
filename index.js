@@ -1,4 +1,3 @@
-const http = require('http');
 const { voltageToVWC } = require('./lib/vh400');
 
 let Service, Characteristic;
@@ -9,14 +8,14 @@ function initializeHomebridge(homebridge) {
   homebridge.registerAccessory('homebridge-plantain', 'Plantain', PlantainAccessory);
 }
 
-function PlantainAccessory(log, config, api, httpClient = http) {
+function PlantainAccessory(log, config, api, fetcher = fetch) {
   this.log = log;
   this.name = config.name || 'Plant Moisture';
   this.ip = config.ip;
   this.channel = config.channel || 1;
   this.pollInterval = (config.pollInterval || 60) * 1000;
   this.lowThreshold = config.lowThreshold ?? 30;
-  this.httpClient = httpClient;
+  this.fetcher = fetcher;
 
   this.currentHumidity = 0;
   this.contactState = Characteristic.ContactSensorState.CONTACT_DETECTED;
@@ -42,7 +41,7 @@ function PlantainAccessory(log, config, api, httpClient = http) {
     .onGet(this.getContactState.bind(this));
 
   this.poll();
-  this.pollTimer = setInterval(this.poll.bind(this), this.pollInterval);
+  this.pollTimer = setInterval(() => this.poll(), this.pollInterval);
 }
 
 PlantainAccessory.prototype.getHumidity = function () {
@@ -53,48 +52,41 @@ PlantainAccessory.prototype.getContactState = function () {
   return this.contactState;
 };
 
-PlantainAccessory.prototype.poll = function () {
+PlantainAccessory.prototype.poll = async function () {
   const url = `http://${this.ip}/api/sensors/data/last`;
 
-  this.httpClient.get(url, (res) => {
-    let data = '';
-    res.on('data', (chunk) => data += chunk);
-    res.on('end', () => {
-      try {
-        const json = JSON.parse(data);
-        const voltage = json[`chan_${this.channel}`];
+  try {
+    const res = await this.fetcher(url);
+    const json = await res.json();
+    const voltage = json[`chan_${this.channel}`];
 
-        if (typeof voltage !== 'number') {
-          this.log.warn(`No data for channel ${this.channel}`);
-          return;
-        }
+    if (typeof voltage !== 'number') {
+      this.log.warn(`No data for channel ${this.channel}`);
+      return;
+    }
 
-        const vwc = Math.max(0, Math.min(100, voltageToVWC(voltage)));
-        this.currentHumidity = Math.round(vwc * 10) / 10;
+    const vwc = Math.max(0, Math.min(100, voltageToVWC(voltage)));
+    this.currentHumidity = Math.round(vwc * 10) / 10;
 
-        const newContactState = vwc < this.lowThreshold
-          ? Characteristic.ContactSensorState.CONTACT_NOT_DETECTED
-          : Characteristic.ContactSensorState.CONTACT_DETECTED;
+    const newContactState = vwc < this.lowThreshold
+      ? Characteristic.ContactSensorState.CONTACT_NOT_DETECTED
+      : Characteristic.ContactSensorState.CONTACT_DETECTED;
 
-        this.log.debug(`Voltage: ${voltage}V, VWC: ${this.currentHumidity}%, Alert: ${newContactState === 0 ? 'OK' : 'LOW'}`);
+    this.log.debug(`Voltage: ${voltage}V, VWC: ${this.currentHumidity}%, Alert: ${newContactState === 0 ? 'OK' : 'LOW'}`);
 
-        this.humidityService
-          .getCharacteristic(Characteristic.CurrentRelativeHumidity)
-          .updateValue(this.currentHumidity);
+    this.humidityService
+      .getCharacteristic(Characteristic.CurrentRelativeHumidity)
+      .updateValue(this.currentHumidity);
 
-        if (newContactState !== this.contactState) {
-          this.contactState = newContactState;
-          this.contactService
-            .getCharacteristic(Characteristic.ContactSensorState)
-            .updateValue(this.contactState);
-        }
-      } catch (e) {
-        this.log.error('Failed to parse VegeHub response:', e.message);
-      }
-    });
-  }).on('error', (e) => {
+    if (newContactState !== this.contactState) {
+      this.contactState = newContactState;
+      this.contactService
+        .getCharacteristic(Characteristic.ContactSensorState)
+        .updateValue(this.contactState);
+    }
+  } catch (e) {
     this.log.error('Failed to reach VegeHub:', e.message);
-  });
+  }
 };
 
 PlantainAccessory.prototype.getServices = function () {

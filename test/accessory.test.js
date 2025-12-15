@@ -1,6 +1,5 @@
 const { describe, it, beforeEach } = require('node:test');
 const assert = require('node:assert');
-const { EventEmitter } = require('events');
 
 // Mock Homebridge HAP
 function createMockCharacteristic() {
@@ -54,31 +53,15 @@ const mockHap = {
   }
 };
 
-// Helper to create mock HTTP client
-function createMockHttpClient(responseData, shouldError = false) {
-  return {
-    get(url, callback) {
-      const emitter = new EventEmitter();
-
-      if (shouldError) {
-        setImmediate(() => emitter.emit('error', new Error('Network error')));
-      } else {
-        setImmediate(() => {
-          callback({
-            on(event, handler) {
-              if (event === 'data') {
-                setImmediate(() => handler(JSON.stringify(responseData)));
-              } else if (event === 'end') {
-                setImmediate(() => handler());
-              }
-              return this;
-            }
-          });
-        });
-      }
-
-      return emitter;
+// Helper to create mock fetch
+function createMockFetch(responseData, shouldError = false) {
+  return async (url) => {
+    if (shouldError) {
+      throw new Error('Network error');
     }
+    return {
+      json: async () => responseData
+    };
   };
 }
 
@@ -93,7 +76,7 @@ function createMockLog() {
   };
 }
 
-// Helper to wait and cleanup
+// Helper to wait
 function wait(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -114,9 +97,9 @@ describe('PlantainAccessory', () => {
     it('creates accessory with valid config', () => {
       const log = createMockLog();
       const config = { name: 'Test Plant', ip: '192.168.1.100', pollInterval: 9999 };
-      const httpClient = createMockHttpClient({ chan_1: 1.5 });
+      const mockFetch = createMockFetch({ chan_1: 1.5 });
 
-      const accessory = new PlantainAccessory(log, config, null, httpClient);
+      const accessory = new PlantainAccessory(log, config, null, mockFetch);
       clearInterval(accessory.pollTimer);
 
       assert.strictEqual(accessory.name, 'Test Plant');
@@ -128,9 +111,9 @@ describe('PlantainAccessory', () => {
     it('uses default values when not specified', () => {
       const log = createMockLog();
       const config = { ip: '192.168.1.100', pollInterval: 9999 };
-      const httpClient = createMockHttpClient({ chan_1: 1.5 });
+      const mockFetch = createMockFetch({ chan_1: 1.5 });
 
-      const accessory = new PlantainAccessory(log, config, null, httpClient);
+      const accessory = new PlantainAccessory(log, config, null, mockFetch);
       clearInterval(accessory.pollTimer);
 
       assert.strictEqual(accessory.name, 'Plant Moisture');
@@ -150,9 +133,9 @@ describe('PlantainAccessory', () => {
     it('returns three services', () => {
       const log = createMockLog();
       const config = { name: 'Test Plant', ip: '192.168.1.100', pollInterval: 9999 };
-      const httpClient = createMockHttpClient({ chan_1: 1.5 });
+      const mockFetch = createMockFetch({ chan_1: 1.5 });
 
-      const accessory = new PlantainAccessory(log, config, null, httpClient);
+      const accessory = new PlantainAccessory(log, config, null, mockFetch);
       clearInterval(accessory.pollTimer);
       const services = accessory.getServices();
 
@@ -164,10 +147,10 @@ describe('PlantainAccessory', () => {
     it('updates humidity from VegeHub response', async () => {
       const log = createMockLog();
       const config = { name: 'Test', ip: '192.168.1.100', pollInterval: 9999 };
-      const httpClient = createMockHttpClient({ chan_1: 1.5 }); // ~24.6% VWC
+      const mockFetch = createMockFetch({ chan_1: 1.5 }); // ~24.6% VWC
 
-      const accessory = new PlantainAccessory(log, config, null, httpClient);
-      await wait(50);
+      const accessory = new PlantainAccessory(log, config, null, mockFetch);
+      await wait(10);
       clearInterval(accessory.pollTimer);
 
       assert.ok(accessory.currentHumidity > 20 && accessory.currentHumidity < 30);
@@ -176,10 +159,10 @@ describe('PlantainAccessory', () => {
     it('triggers contact sensor when below threshold', async () => {
       const log = createMockLog();
       const config = { name: 'Test', ip: '192.168.1.100', lowThreshold: 50, pollInterval: 9999 };
-      const httpClient = createMockHttpClient({ chan_1: 1.5 }); // ~24.6% VWC, below 50%
+      const mockFetch = createMockFetch({ chan_1: 1.5 }); // ~24.6% VWC, below 50%
 
-      const accessory = new PlantainAccessory(log, config, null, httpClient);
-      await wait(50);
+      const accessory = new PlantainAccessory(log, config, null, mockFetch);
+      await wait(10);
       clearInterval(accessory.pollTimer);
 
       assert.strictEqual(accessory.contactState, mockHap.Characteristic.ContactSensorState.CONTACT_NOT_DETECTED);
@@ -188,10 +171,10 @@ describe('PlantainAccessory', () => {
     it('keeps contact sensor closed when above threshold', async () => {
       const log = createMockLog();
       const config = { name: 'Test', ip: '192.168.1.100', lowThreshold: 10, pollInterval: 9999 };
-      const httpClient = createMockHttpClient({ chan_1: 1.5 }); // ~24.6% VWC, above 10%
+      const mockFetch = createMockFetch({ chan_1: 1.5 }); // ~24.6% VWC, above 10%
 
-      const accessory = new PlantainAccessory(log, config, null, httpClient);
-      await wait(50);
+      const accessory = new PlantainAccessory(log, config, null, mockFetch);
+      await wait(10);
       clearInterval(accessory.pollTimer);
 
       assert.strictEqual(accessory.contactState, mockHap.Characteristic.ContactSensorState.CONTACT_DETECTED);
@@ -200,10 +183,10 @@ describe('PlantainAccessory', () => {
     it('reads from correct channel', async () => {
       const log = createMockLog();
       const config = { name: 'Test', ip: '192.168.1.100', channel: 2, pollInterval: 9999 };
-      const httpClient = createMockHttpClient({ chan_1: 0.5, chan_2: 2.0 });
+      const mockFetch = createMockFetch({ chan_1: 0.5, chan_2: 2.0 });
 
-      const accessory = new PlantainAccessory(log, config, null, httpClient);
-      await wait(50);
+      const accessory = new PlantainAccessory(log, config, null, mockFetch);
+      await wait(10);
       clearInterval(accessory.pollTimer);
 
       // chan_2 = 2.0V = ~44.75% VWC
@@ -215,10 +198,10 @@ describe('PlantainAccessory', () => {
     it('logs warning when channel data is missing', async () => {
       const log = createMockLog();
       const config = { name: 'Test', ip: '192.168.1.100', channel: 3, pollInterval: 9999 };
-      const httpClient = createMockHttpClient({ chan_1: 1.5 }); // No chan_3
+      const mockFetch = createMockFetch({ chan_1: 1.5 }); // No chan_3
 
-      const accessory = new PlantainAccessory(log, config, null, httpClient);
-      await wait(50);
+      const accessory = new PlantainAccessory(log, config, null, mockFetch);
+      await wait(10);
       clearInterval(accessory.pollTimer);
 
       assert.ok(log.messages.some(m => m.level === 'warn'));
@@ -227,10 +210,10 @@ describe('PlantainAccessory', () => {
     it('logs error on network failure', async () => {
       const log = createMockLog();
       const config = { name: 'Test', ip: '192.168.1.100', pollInterval: 9999 };
-      const httpClient = createMockHttpClient({}, true); // shouldError = true
+      const mockFetch = createMockFetch({}, true); // shouldError = true
 
-      const accessory = new PlantainAccessory(log, config, null, httpClient);
-      await wait(50);
+      const accessory = new PlantainAccessory(log, config, null, mockFetch);
+      await wait(10);
       clearInterval(accessory.pollTimer);
 
       assert.ok(log.messages.some(m => m.level === 'error' && m.args[0].includes('Failed to reach')));
