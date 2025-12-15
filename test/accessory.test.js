@@ -37,9 +37,9 @@ function createMockService(name) {
 
 const mockHap = {
   Service: {
-    AccessoryInformation: function() { return createMockService('AccessoryInformation'); },
-    HumiditySensor: function(name) { return createMockService(name); },
-    ContactSensor: function(name) { return createMockService(name); }
+    AccessoryInformation: function () { return createMockService('AccessoryInformation'); },
+    HumiditySensor: function (name) { return createMockService(name); },
+    ContactSensor: function (name) { return createMockService(name); }
   },
   Characteristic: {
     Manufacturer: 'Manufacturer',
@@ -97,7 +97,7 @@ describe('PlantainAccessory', () => {
     it('creates accessory with valid config', () => {
       const log = createMockLog();
       const config = { name: 'Test Plant', ip: '192.168.1.100', pollInterval: 9999 };
-      const mockFetch = createMockFetch({ chan_1: 1.5 });
+      const mockFetch = createMockFetch({ samples: [{ chan: 1, value: 1.5 }] });
 
       const accessory = new PlantainAccessory(log, config, null, mockFetch);
       clearInterval(accessory.pollTimer);
@@ -111,7 +111,7 @@ describe('PlantainAccessory', () => {
     it('uses default values when not specified', () => {
       const log = createMockLog();
       const config = { ip: '192.168.1.100', pollInterval: 9999 };
-      const mockFetch = createMockFetch({ chan_1: 1.5 });
+      const mockFetch = createMockFetch({ samples: [{ chan: 1, value: 1.5 }] });
 
       const accessory = new PlantainAccessory(log, config, null, mockFetch);
       clearInterval(accessory.pollTimer);
@@ -133,7 +133,7 @@ describe('PlantainAccessory', () => {
     it('returns three services', () => {
       const log = createMockLog();
       const config = { name: 'Test Plant', ip: '192.168.1.100', pollInterval: 9999 };
-      const mockFetch = createMockFetch({ chan_1: 1.5 });
+      const mockFetch = createMockFetch({ samples: [{ chan: 1, value: 1.5 }] });
 
       const accessory = new PlantainAccessory(log, config, null, mockFetch);
       clearInterval(accessory.pollTimer);
@@ -147,7 +147,7 @@ describe('PlantainAccessory', () => {
     it('updates humidity from VegeHub response', async () => {
       const log = createMockLog();
       const config = { name: 'Test', ip: '192.168.1.100', pollInterval: 9999 };
-      const mockFetch = createMockFetch({ chan_1: 1.5 }); // ~24.6% VWC
+      const mockFetch = createMockFetch({ samples: [{ chan: 1, value: 1.5 }] }); // ~24.6% VWC
 
       const accessory = new PlantainAccessory(log, config, null, mockFetch);
       await wait(10);
@@ -159,7 +159,7 @@ describe('PlantainAccessory', () => {
     it('triggers contact sensor when below threshold', async () => {
       const log = createMockLog();
       const config = { name: 'Test', ip: '192.168.1.100', lowThreshold: 50, pollInterval: 9999 };
-      const mockFetch = createMockFetch({ chan_1: 1.5 }); // ~24.6% VWC, below 50%
+      const mockFetch = createMockFetch({ samples: [{ chan: 1, value: 1.5 }] }); // ~24.6% VWC, below 50%
 
       const accessory = new PlantainAccessory(log, config, null, mockFetch);
       await wait(10);
@@ -171,7 +171,7 @@ describe('PlantainAccessory', () => {
     it('keeps contact sensor closed when above threshold', async () => {
       const log = createMockLog();
       const config = { name: 'Test', ip: '192.168.1.100', lowThreshold: 10, pollInterval: 9999 };
-      const mockFetch = createMockFetch({ chan_1: 1.5 }); // ~24.6% VWC, above 10%
+      const mockFetch = createMockFetch({ samples: [{ chan: 1, value: 1.5 }] }); // ~24.6% VWC, above 10%
 
       const accessory = new PlantainAccessory(log, config, null, mockFetch);
       await wait(10);
@@ -183,7 +183,7 @@ describe('PlantainAccessory', () => {
     it('reads from correct channel', async () => {
       const log = createMockLog();
       const config = { name: 'Test', ip: '192.168.1.100', channel: 2, pollInterval: 9999 };
-      const mockFetch = createMockFetch({ chan_1: 0.5, chan_2: 2.0 });
+      const mockFetch = createMockFetch({ samples: [{ chan: 1, value: 0.5 }, { chan: 2, value: 2.0 }] });
 
       const accessory = new PlantainAccessory(log, config, null, mockFetch);
       await wait(10);
@@ -198,7 +198,7 @@ describe('PlantainAccessory', () => {
     it('logs warning when channel data is missing', async () => {
       const log = createMockLog();
       const config = { name: 'Test', ip: '192.168.1.100', channel: 3, pollInterval: 9999 };
-      const mockFetch = createMockFetch({ chan_1: 1.5 }); // No chan_3
+      const mockFetch = createMockFetch({ samples: [{ chan: 1, value: 1.5 }] }); // No chan_3
 
       const accessory = new PlantainAccessory(log, config, null, mockFetch);
       await wait(10);

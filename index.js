@@ -58,7 +58,7 @@ PlantainAccessory.prototype.poll = async function () {
   try {
     const res = await this.fetcher(url);
     const json = await res.json();
-    const voltage = json[`chan_${this.channel}`];
+    const voltage = (json.samples.find(s => Number(s.chan) === Number(this.channel)) || {}).value;
 
     if (typeof voltage !== 'number') {
       this.log.warn(`No data for channel ${this.channel}`);
