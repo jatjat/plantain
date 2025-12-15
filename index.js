@@ -1,32 +1,22 @@
 const http = require('http');
+const { voltageToVWC } = require('./lib/vh400');
 
 let Service, Characteristic;
 
-module.exports = function (homebridge) {
+function initializeHomebridge(homebridge) {
   Service = homebridge.hap.Service;
   Characteristic = homebridge.hap.Characteristic;
   homebridge.registerAccessory('homebridge-plantain', 'Plantain', PlantainAccessory);
-};
-
-// Official VH400 piecewise curve from Vegetronix
-// https://www.vegetronix.com/Products/VH400/VH400-Piecewise-Curve
-function voltageToVWC(voltage) {
-  if (voltage <= 0) return 0;
-  if (voltage < 1.1) return 10 * voltage - 1;
-  if (voltage < 1.3) return 25 * voltage - 17.5;
-  if (voltage < 1.82) return 48.08 * voltage - 47.5;
-  if (voltage < 2.2) return 26.32 * voltage - 7.89;
-  if (voltage <= 3.0) return 62.5 * voltage - 87.5;
-  return 100;
 }
 
-function PlantainAccessory(log, config) {
+function PlantainAccessory(log, config, api, httpClient = http) {
   this.log = log;
   this.name = config.name || 'Plant Moisture';
   this.ip = config.ip;
   this.channel = config.channel || 1;
   this.pollInterval = (config.pollInterval || 60) * 1000;
   this.lowThreshold = config.lowThreshold ?? 30;
+  this.httpClient = httpClient;
 
   this.currentHumidity = 0;
   this.contactState = Characteristic.ContactSensorState.CONTACT_DETECTED;
@@ -52,7 +42,7 @@ function PlantainAccessory(log, config) {
     .onGet(this.getContactState.bind(this));
 
   this.poll();
-  setInterval(this.poll.bind(this), this.pollInterval);
+  this.pollTimer = setInterval(this.poll.bind(this), this.pollInterval);
 }
 
 PlantainAccessory.prototype.getHumidity = function () {
@@ -66,7 +56,7 @@ PlantainAccessory.prototype.getContactState = function () {
 PlantainAccessory.prototype.poll = function () {
   const url = `http://${this.ip}/api/sensors/data/last`;
 
-  http.get(url, (res) => {
+  this.httpClient.get(url, (res) => {
     let data = '';
     res.on('data', (chunk) => data += chunk);
     res.on('end', () => {
@@ -109,4 +99,14 @@ PlantainAccessory.prototype.poll = function () {
 
 PlantainAccessory.prototype.getServices = function () {
   return [this.informationService, this.humidityService, this.contactService];
+};
+
+// Export for Homebridge
+module.exports = initializeHomebridge;
+
+// Export internals for testing
+module.exports.PlantainAccessory = PlantainAccessory;
+module.exports.setHomebridge = function (hap) {
+  Service = hap.Service;
+  Characteristic = hap.Characteristic;
 };

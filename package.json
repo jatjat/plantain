@@ -4,7 +4,7 @@
   "description": "Homebridge plugin for VH400 soil moisture sensor via VegeHub",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test test/*.test.js"
   },
   "keywords": [
     "homebridge-plugin",
