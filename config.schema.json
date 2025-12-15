@@ -1,0 +1,46 @@
+{
+  "pluginAlias": "Plantain",
+  "pluginType": "accessory",
+  "singular": false,
+  "schema": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "title": "Name",
+        "type": "string",
+        "default": "Plant Moisture",
+        "required": true
+      },
+      "ip": {
+        "title": "VegeHub IP Address",
+        "type": "string",
+        "format": "ipv4",
+        "required": true,
+        "description": "The IP address of your VegeHub on the local network"
+      },
+      "channel": {
+        "title": "Sensor Channel",
+        "type": "integer",
+        "default": 1,
+        "minimum": 1,
+        "maximum": 4,
+        "description": "Which VegeHub channel the VH400 sensor is connected to"
+      },
+      "pollInterval": {
+        "title": "Poll Interval (seconds)",
+        "type": "integer",
+        "default": 60,
+        "minimum": 10,
+        "description": "How often to poll the VegeHub for sensor data"
+      },
+      "lowThreshold": {
+        "title": "Low Moisture Threshold (%)",
+        "type": "integer",
+        "default": 30,
+        "minimum": 0,
+        "maximum": 100,
+        "description": "Moisture level below which the contact sensor will trigger (for notifications)"
+      }
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "name": "homebridge-plantain",
+  "version": "1.0.0",
+  "description": "Homebridge plugin for VH400 soil moisture sensor via VegeHub",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "homebridge-plugin",
+    "homebridge",
+    "vh400",
+    "vegehub",
+    "vegetronix",
+    "soil-moisture",
+    "plant",
+    "humidity"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "homebridge": ">=1.0.0",
+    "node": ">=18.0.0"
+  },
+  "dependencies": {}
+}
