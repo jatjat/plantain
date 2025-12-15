@@ -66,6 +66,11 @@ PlantainAccessory.prototype.getContactState = function () {
   return this.contactState;
 };
 
+PlantainAccessory.prototype.shouldLogStateChange = function (oldHumidity, newHumidity, oldContactState, newContactState) {
+  const humidityDelta = Math.abs(newHumidity - oldHumidity);
+  return humidityDelta > 0.1 || newContactState !== oldContactState;
+};
+
 PlantainAccessory.prototype.poll = async function () {
   const url = `http://${this.ip}/api/sensors/data/last`;
 
@@ -80,13 +85,19 @@ PlantainAccessory.prototype.poll = async function () {
     const voltage = extractVoltage(json, this.channel);
 
     const vwc = Math.max(0, Math.min(100, voltageToVWC(voltage)));
+    const oldHumidity = this.currentHumidity;
     this.currentHumidity = Math.round(vwc * 10) / 10;
 
     const newContactState = vwc < this.lowThreshold
       ? Characteristic.ContactSensorState.CONTACT_NOT_DETECTED
       : Characteristic.ContactSensorState.CONTACT_DETECTED;
 
-    this.log.debug(`Voltage: ${voltage}V, VWC: ${this.currentHumidity}%, Alert: ${newContactState === 0 ? 'OK' : 'LOW'}`);
+    const message = `Voltage: ${voltage}V, VWC: ${this.currentHumidity}%, Alert: ${newContactState === 0 ? 'OK' : 'LOW'}`;
+    this.log.debug(message);
+
+    if (this.shouldLogStateChange(oldHumidity, this.currentHumidity, this.contactState, newContactState)) {
+      this.log.info(message);
+    }
 
     this.humidityService
       .getCharacteristic(Characteristic.CurrentRelativeHumidity)
@@ -116,3 +127,4 @@ module.exports.setHomebridge = function (hap) {
   Service = hap.Service;
   Characteristic = hap.Characteristic;
 };
+module.exports.shouldLogStateChange = PlantainAccessory.prototype.shouldLogStateChange;

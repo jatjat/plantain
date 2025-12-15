@@ -291,4 +291,42 @@ describe('PlantainAccessory', () => {
       assert.ok(errorLog);
     });
   });
+
+  describe('state change detection', () => {
+    let shouldLogStateChange;
+
+    beforeEach(() => {
+      shouldLogStateChange = require('../index.js').shouldLogStateChange;
+    });
+
+    it('logs when humidity increases above delta threshold (0.1%)', () => {
+      const result = shouldLogStateChange(10.0, 10.2, 0, 0);
+      assert.strictEqual(result, true);
+    });
+
+    it('logs when humidity decreases above delta threshold', () => {
+      const result = shouldLogStateChange(10.5, 10.2, 0, 0);
+      assert.strictEqual(result, true);
+    });
+
+    it('does not log when humidity change is below threshold', () => {
+      const result = shouldLogStateChange(10.0, 10.05, 0, 0);
+      assert.strictEqual(result, false);
+    });
+
+    it('does not log when humidity is exactly the same', () => {
+      const result = shouldLogStateChange(10.0, 10.0, 0, 0);
+      assert.strictEqual(result, false);
+    });
+
+    it('logs when contact state changes', () => {
+      const result = shouldLogStateChange(10.0, 10.0, 0, 1);
+      assert.strictEqual(result, true);
+    });
+
+    it('logs when both humidity and contact state change', () => {
+      const result = shouldLogStateChange(10.0, 10.2, 0, 1);
+      assert.strictEqual(result, true);
+    });
+  });
 });
