@@ -6,14 +6,6 @@ Exposes your plant's moisture level to Apple HomeKit as:
 - **Humidity Sensor** - displays moisture percentage (VWC)
 - **Contact Sensor** - triggers native iOS notifications when moisture drops below threshold
 
-## Installation
-
-```bash
-npm install -g homebridge-plantain
-```
-
-Or install via Homebridge Config UI X.
-
 ## Configuration
 
 Add to your Homebridge `config.json`:
